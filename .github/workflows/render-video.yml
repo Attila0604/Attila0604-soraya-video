@@ -1,0 +1,42 @@
+name: Render Soraya Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      brand:
+        description: "Markenname"
+        required: true
+        default: "SORAYA"
+      tagline:
+        description: "Slogan"
+        required: true
+        default: "Deine Sterne. Dein Weg."
+      cta:
+        description: "Call to Action"
+        required: true
+        default: "Jetzt entdecken"
+      storeLine:
+        description: "Store-Zeile"
+        required: true
+        default: "Ab sofort im Google Play Store"
+
+jobs:
+  render:
+    name: Render video
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Build props
+        run: echo "$WORKFLOW_INPUT" > input-props.json
+        env:
+          WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
+      - name: Render
+        run: npx remotion render SorayaPromo out/soraya.mp4 --props="./input-props.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soraya-video
+          path: out/soraya.mp4
