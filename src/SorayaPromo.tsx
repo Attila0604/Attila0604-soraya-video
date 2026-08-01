@@ -230,7 +230,9 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
   // Kamera: langsame Push-in-Fahrt + Drift + leichte Rotation
   const pushIn = interpolate(frame, [0, TOUR], [0.95, 1.07]);
   const driftX = Math.sin(frame / 68) * 20;
-  const rot = Math.sin(frame / 88) * 1.4;
+  const rot = Math.sin(frame / 88) * 1.2;
+  const tiltY = Math.sin(frame / 50) * 2.4;
+  const tiltX = Math.cos(frame / 64) * 1.4;
   const float = Math.sin(frame / 28) * 7;
 
   // Zoom-Punch bei jedem Themenwechsel
@@ -280,6 +282,22 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
         </div>
       </div>
 
+      {/* Spotlight hinter dem Handy */}
+      <div
+        style={{
+          position: "absolute",
+          width: 1000,
+          height: 1000,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${gold}22 0%, transparent 60%)`,
+          top: "48%",
+          left: "50%",
+          transform: `translate(-50%,-50%) scale(${1 + punch * 3})`,
+          opacity: 0.6 + punch * 4,
+          filter: "blur(30px)",
+        }}
+      />
+
       {/* Handy mit echtem App-Video */}
       <div style={{ perspective: 1600 }}>
         <div
@@ -291,7 +309,8 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
             background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
             boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 ${glowPulse}px ${gold}44`,
             opacity: enter,
-            transform: `translateX(${driftX}px) translateY(${(1 - enter) * 60 + float}px) rotate(${rot}deg) scale(${scale})`,
+            transform: `translateX(${driftX}px) translateY(${(1 - enter) * 60 + float}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) rotateZ(${rot}deg) scale(${scale})`,
+            transformStyle: "preserve-3d",
           }}
         >
           <div
@@ -330,6 +349,17 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
                 background: `linear-gradient(115deg, transparent 40%, ${gold}18 50%, transparent 60%)`,
                 backgroundSize: "300% 100%",
                 backgroundPositionX: `${interpolate(frame % 120, [0, 120], [-100, 200])}%`,
+              }}
+            />
+            {/* Sicherheitsnetz: unteren Rand ins Dunkle blenden */}
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: "7%",
+                background: "linear-gradient(to bottom, transparent, #0A0B1E)",
               }}
             />
           </div>
