@@ -28,6 +28,21 @@ try {
 }
 await page.waitForTimeout(2500);
 
+// Grauen Browser-Hintergrund dunkel einfärben (sonst blitzt er unten durch)
+// und Scrollbalken ausblenden
+try {
+  await page.addStyleTag({
+    content: `html, body, #__next, #root, main {
+      background:#0A0B1E !important;
+      min-height:100% !important;
+    }
+    *::-webkit-scrollbar { display:none !important; }`,
+  });
+} catch (e) {
+  console.log("styleTag fail:", e.message);
+}
+await page.waitForTimeout(400);
+
 const smoothScroll = async (to, step, delay) => {
   await page.evaluate(
     async ({ to, step, delay }) => {
