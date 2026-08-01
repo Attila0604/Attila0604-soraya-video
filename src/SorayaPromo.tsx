@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
   OffthreadVideo,
   staticFile,
   interpolate,
@@ -212,51 +213,67 @@ const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: stri
   );
 };
 
-// =================== App-Tour (echtes Video im Handy) ===================
+// =================== App-Tour (echtes Video, dynamische Kamera) ===================
 const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: string }> = ({ captions, trim, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
-  const float = Math.sin(frame / 28) * 7;
   const screenW = 560;
   const screenH = 1212;
   const trimFrames = Math.round(trim * fps);
 
-  const items = captions.map((c, i) => ({
+  const items = captions.map((c) => ({
     text: c.text,
     appear: Math.max(0, Math.round((c.at - trim) * fps)),
   }));
 
+  // Kamera: langsame Push-in-Fahrt + Drift + leichte Rotation
+  const pushIn = interpolate(frame, [0, TOUR], [0.95, 1.07]);
+  const driftX = Math.sin(frame / 68) * 20;
+  const rot = Math.sin(frame / 88) * 1.4;
+  const float = Math.sin(frame / 28) * 7;
+
+  // Zoom-Punch bei jedem Themenwechsel
+  let punch = 0;
+  for (const it of items) {
+    const d = frame - it.appear;
+    if (d >= 0 && d < 18) punch = Math.max(punch, 0.055 * (1 - d / 18));
+  }
+  const scale = (0.94 + enter * 0.06) * (pushIn + punch);
+  const glowPulse = 22 + punch * 900;
+
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-      {/* Caption-Overlay, zeitlich passend */}
-      <div style={{ height: 150, marginBottom: 34, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
-        <div style={{ fontFamily: sans, fontSize: 26, letterSpacing: 6, color: gold, textTransform: "uppercase", marginBottom: 14, opacity: enter }}>
+      {/* Caption-Overlay */}
+      <div style={{ height: 168, marginBottom: 30, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
+        <div style={{ fontFamily: sans, fontSize: 24, letterSpacing: 7, color: gold, textTransform: "uppercase", marginBottom: 16, opacity: enter }}>
           ✦ Soraya
         </div>
-        <div style={{ position: "relative", height: 80, width: 940 }}>
+        <div style={{ position: "relative", height: 96, width: 960 }}>
           {items.map((it, i) => {
             const end = i < items.length - 1 ? items[i + 1].appear : TOUR;
+            const local = frame - it.appear;
             const op = interpolate(frame, [it.appear, it.appear + 12, end - 12, end], [0, 1, 1, 0], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             });
+            const reveal = spring({ frame: local, fps, config: { damping: 200 }, durationInFrames: 26 });
+            const underline = interpolate(local, [4, 24], [0, 260], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
             return (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  textAlign: "center",
-                  fontFamily: serif,
-                  fontSize: 64,
-                  fontWeight: 600,
-                  color: text,
-                  opacity: op,
-                  transform: `translateY(${(1 - op) * 14}px)`,
-                }}
-              >
-                {it.text}
+              <div key={i} style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", opacity: op }}>
+                <div
+                  style={{
+                    textAlign: "center",
+                    fontFamily: serif,
+                    fontSize: 70,
+                    fontWeight: 600,
+                    color: text,
+                    transform: `translateY(${(1 - reveal) * 26}px)`,
+                  }}
+                >
+                  {it.text}
+                </div>
+                <div style={{ width: op > 0 ? underline : 0, height: 2, background: gold, marginTop: 14, boxShadow: `0 0 10px ${gold}` }} />
               </div>
             );
           })}
@@ -264,47 +281,58 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
       </div>
 
       {/* Handy mit echtem App-Video */}
-      <div
-        style={{
-          width: screenW + 34,
-          height: screenH + 34,
-          borderRadius: 68,
-          padding: 17,
-          background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
-          boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 70px ${gold}22`,
-          opacity: enter,
-          transform: `translateY(${(1 - enter) * 60 + float}px) scale(${0.94 + enter * 0.06})`,
-        }}
-      >
+      <div style={{ perspective: 1600 }}>
         <div
           style={{
-            width: screenW,
-            height: screenH,
-            borderRadius: 52,
-            overflow: "hidden",
-            position: "relative",
-            border: `1px solid ${gold}44`,
-            background: "#05060F",
+            width: screenW + 34,
+            height: screenH + 34,
+            borderRadius: 68,
+            padding: 17,
+            background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
+            boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 ${glowPulse}px ${gold}44`,
+            opacity: enter,
+            transform: `translateX(${driftX}px) translateY(${(1 - enter) * 60 + float}px) rotate(${rot}deg) scale(${scale})`,
           }}
         >
-          <OffthreadVideo
-            src={staticFile("app-tour.webm")}
-            trimBefore={trimFrames}
-            muted
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          />
           <div
             style={{
-              position: "absolute",
-              top: 14,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 150,
-              height: 30,
-              borderRadius: 18,
-              background: "#000",
+              width: screenW,
+              height: screenH,
+              borderRadius: 52,
+              overflow: "hidden",
+              position: "relative",
+              border: `1px solid ${gold}44`,
+              background: "#05060F",
             }}
-          />
+          >
+            <OffthreadVideo
+              src={staticFile("app-tour.webm")}
+              trimBefore={trimFrames}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: 14,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 150,
+                height: 30,
+                borderRadius: 18,
+                background: "#000",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: `linear-gradient(115deg, transparent 40%, ${gold}18 50%, transparent 60%)`,
+                backgroundSize: "300% 100%",
+                backgroundPositionX: `${interpolate(frame % 120, [0, 120], [-100, 200])}%`,
+              }}
+            />
+          </div>
         </div>
       </div>
     </AbsoluteFill>
@@ -376,6 +404,7 @@ export const SorayaPromo: React.FC<SorayaProps> = ({ brand, tagline, cta, storeL
   const timing = springTiming({ config: { damping: 200 }, durationInFrames: TRANS });
   return (
     <AbsoluteFill>
+      <Audio src={staticFile("music.mp3")} volume={0.85} />
       <AnimatedBackground gold={gold} bg={bg} />
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={INTRO}>
