@@ -39,6 +39,7 @@ export type SorayaProps = {
   text: string;
   captions: Caption[];
   trim: number;
+  video: string;
 };
 
 export const defaultSorayaProps: SorayaProps = {
@@ -51,6 +52,7 @@ export const defaultSorayaProps: SorayaProps = {
   text: "#F4F1E8",
   captions: [],
   trim: 0,
+  video: "app-tour.mp4",
 };
 
 // =================== Hintergrund ===================
@@ -214,7 +216,7 @@ const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: stri
 };
 
 // =================== App-Tour (echtes Video, dynamische Kamera) ===================
-const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: string }> = ({ captions, trim, gold, text }) => {
+const Tour: React.FC<{ captions: Caption[]; trim: number; video: string; gold: string; text: string }> = ({ captions, trim, video, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
@@ -321,14 +323,14 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: st
               overflow: "hidden",
               position: "relative",
               border: `1px solid ${gold}44`,
-              background: "#05060F",
+              background: "#0A0B1E",
             }}
           >
             <OffthreadVideo
-              src={staticFile("app-tour.webm")}
+              src={staticFile(video)}
               trimBefore={trimFrames}
               muted
-              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
             <div
               style={{
@@ -430,7 +432,7 @@ const Outro: React.FC<{ brand: string; cta: string; storeLine: string; gold: str
 };
 
 // =================== Haupt-Komposition ===================
-export const SorayaPromo: React.FC<SorayaProps> = ({ brand, tagline, cta, storeLine, bg, gold, text, captions, trim }) => {
+export const SorayaPromo: React.FC<SorayaProps> = ({ brand, tagline, cta, storeLine, bg, gold, text, captions, trim, video }) => {
   const timing = springTiming({ config: { damping: 200 }, durationInFrames: TRANS });
   return (
     <AbsoluteFill>
@@ -442,7 +444,7 @@ export const SorayaPromo: React.FC<SorayaProps> = ({ brand, tagline, cta, storeL
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition presentation={slide({ direction: "from-bottom" })} timing={timing} />
         <TransitionSeries.Sequence durationInFrames={TOUR}>
-          <Tour captions={captions} trim={trim} gold={gold} text={text} />
+          <Tour captions={captions} trim={trim} video={video} gold={gold} text={text} />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition presentation={fade()} timing={timing} />
         <TransitionSeries.Sequence durationInFrames={OUTRO}>
