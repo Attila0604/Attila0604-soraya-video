@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "remotion studio",
+    "shoot": "node scripts/shoot.mjs",
     "render": "remotion render SorayaPromo out/soraya.mp4",
     "upgrade": "remotion upgrade"
   },
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/react": "19.0.0",
+    "playwright": "1.62.1",
     "typescript": "5.9.3"
   }
 }
