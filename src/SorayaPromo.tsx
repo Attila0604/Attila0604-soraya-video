@@ -1,7 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
-  Img,
+  OffthreadVideo,
   staticFile,
   interpolate,
   spring,
@@ -20,14 +20,13 @@ const { fontFamily: sans } = loadSans();
 
 // ---- Timing (Frames bei 30 fps) ----
 export const INTRO = 78;
-export const PER_SHOT = 100;
+export const TOUR = 540; // 18 s App-Tour
 export const OUTRO = 100;
-export const TRANS = 20; // Überblend-Dauer
+export const TRANS = 20;
+export const FPS = 30;
+export const TOTAL = INTRO + TOUR + OUTRO - 2 * TRANS;
 
-// Gesamtlänge: Segmente = 1 Intro + n Shots + 1 Outro; Übergänge = n+1
-export const computeDuration = (n: number) => INTRO + n * PER_SHOT + OUTRO - (n + 1) * TRANS;
-
-export type Shot = { file: string; caption: string };
+export type Caption = { text: string; at: number };
 
 export type SorayaProps = {
   brand: string;
@@ -37,7 +36,8 @@ export type SorayaProps = {
   bg: string;
   gold: string;
   text: string;
-  shots: Shot[];
+  captions: Caption[];
+  trim: number;
 };
 
 export const defaultSorayaProps: SorayaProps = {
@@ -48,7 +48,8 @@ export const defaultSorayaProps: SorayaProps = {
   bg: "#0A0B1E",
   gold: "#E4C77E",
   text: "#F4F1E8",
-  shots: [],
+  captions: [],
+  trim: 0,
 };
 
 // =================== Hintergrund ===================
@@ -56,12 +57,11 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
 
-  // driftende Aurora-Blobs
   const blobs = [
     { c: "#4b2f9e", r: 900, sx: 0.22, sy: 0.18, px: 0, py: 0 },
     { c: "#7a3f95", r: 780, sx: 0.16, sy: 0.24, px: 2, py: 1 },
     { c: "#1f3a8a", r: 820, sx: 0.2, sy: 0.14, px: 4, py: 3 },
-    { c: gold, r: 500, sx: 0.12, sy: 0.2, px: 1, py: 5 },
+    { c: gold, r: 480, sx: 0.12, sy: 0.2, px: 1, py: 5 },
   ];
 
   const stars = new Array(110).fill(0).map((_, i) => {
@@ -73,7 +73,6 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
     return { x, y, size, tw, i };
   });
 
-  // Sternschnuppe alle ~150 Frames
   const cycle = 150;
   const t = frame % cycle;
   const shootActive = t < 26;
@@ -98,7 +97,7 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
               height: b.r,
               borderRadius: "50%",
               background: b.c,
-              opacity: 0.28,
+              opacity: 0.26,
               filter: "blur(120px)",
             }}
           />
@@ -138,20 +137,19 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
         />
       )}
 
-      {/* Vignette */}
       <AbsoluteFill style={{ background: "radial-gradient(120% 100% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
     </AbsoluteFill>
   );
 };
 
-// =================== Kinetischer Text ===================
-const KineticText: React.FC<{
-  text: string;
-  size: number;
-  color: string;
-  italic?: boolean;
-  delay?: number;
-}> = ({ text, size, color, italic, delay = 0 }) => {
+// =================== Kinetischer Text (Intro/Outro) ===================
+const KineticText: React.FC<{ text: string; size: number; color: string; italic?: boolean; delay?: number }> = ({
+  text,
+  size,
+  color,
+  italic,
+  delay = 0,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const words = text.split(" ");
@@ -182,12 +180,7 @@ const KineticText: React.FC<{
 };
 
 // =================== Intro ===================
-const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: string }> = ({
-  brand,
-  tagline,
-  gold,
-  text,
-}) => {
+const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: string }> = ({ brand, tagline, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const rise = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 45 });
@@ -214,87 +207,104 @@ const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: stri
         </div>
       </div>
       <div style={{ width: interpolate(rise, [0, 1], [0, 160]), height: 1, background: gold, margin: "22px 0 30px" }} />
-      <div style={{ marginTop: 6 }}>
-        <KineticText text={tagline} size={54} color={gold} italic delay={22} />
-      </div>
+      <KineticText text={tagline} size={54} color={gold} italic delay={22} />
     </AbsoluteFill>
   );
 };
 
-// =================== Handy mit Screenshot ===================
-const PhoneShot: React.FC<{ shot: Shot; gold: string; text: string }> = ({ shot, gold, text }) => {
+// =================== App-Tour (echtes Video im Handy) ===================
+const Tour: React.FC<{ captions: Caption[]; trim: number; gold: string; text: string }> = ({ captions, trim, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 32 });
-  const float = Math.sin(frame / 26) * 8;
-  const tiltY = Math.sin(frame / 42) * 4;
-  const tiltX = Math.cos(frame / 55) * 2;
+  const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
+  const float = Math.sin(frame / 28) * 7;
   const screenW = 560;
   const screenH = 1212;
+  const trimFrames = Math.round(trim * fps);
+
+  const items = captions.map((c, i) => ({
+    text: c.text,
+    appear: Math.max(0, Math.round((c.at - trim) * fps)),
+  }));
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-      {/* Eyebrow + Caption */}
-      <div style={{ opacity: enter, transform: `translateY(${(1 - enter) * -18}px)`, marginBottom: 40, textAlign: "center" }}>
-        <div style={{ fontFamily: sans, fontSize: 26, letterSpacing: 6, color: gold, textTransform: "uppercase", marginBottom: 14 }}>
+      {/* Caption-Overlay, zeitlich passend */}
+      <div style={{ height: 150, marginBottom: 34, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
+        <div style={{ fontFamily: sans, fontSize: 26, letterSpacing: 6, color: gold, textTransform: "uppercase", marginBottom: 14, opacity: enter }}>
           ✦ Soraya
         </div>
-        <KineticText text={shot.caption} size={64} color={text} />
+        <div style={{ position: "relative", height: 80, width: 940 }}>
+          {items.map((it, i) => {
+            const end = i < items.length - 1 ? items[i + 1].appear : TOUR;
+            const op = interpolate(frame, [it.appear, it.appear + 12, end - 12, end], [0, 1, 1, 0], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            });
+            return (
+              <div
+                key={i}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  textAlign: "center",
+                  fontFamily: serif,
+                  fontSize: 64,
+                  fontWeight: 600,
+                  color: text,
+                  opacity: op,
+                  transform: `translateY(${(1 - op) * 14}px)`,
+                }}
+              >
+                {it.text}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Phone mit 3D-Kippung */}
-      <div style={{ perspective: 1500 }}>
+      {/* Handy mit echtem App-Video */}
+      <div
+        style={{
+          width: screenW + 34,
+          height: screenH + 34,
+          borderRadius: 68,
+          padding: 17,
+          background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
+          boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 70px ${gold}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60 + float}px) scale(${0.94 + enter * 0.06})`,
+        }}
+      >
         <div
           style={{
-            width: screenW + 34,
-            height: screenH + 34,
-            borderRadius: 68,
-            padding: 17,
-            background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
-            boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 70px ${gold}22`,
-            opacity: enter,
-            transform: `translateY(${(1 - enter) * 70 + float}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) scale(${0.92 + enter * 0.08})`,
-            transformStyle: "preserve-3d",
+            width: screenW,
+            height: screenH,
+            borderRadius: 52,
+            overflow: "hidden",
+            position: "relative",
+            border: `1px solid ${gold}44`,
+            background: "#05060F",
           }}
         >
+          <OffthreadVideo
+            src={staticFile("app-tour.webm")}
+            trimBefore={trimFrames}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
           <div
             style={{
-              width: screenW,
-              height: screenH,
-              borderRadius: 52,
-              overflow: "hidden",
-              position: "relative",
-              border: `1px solid ${gold}44`,
+              position: "absolute",
+              top: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 150,
+              height: 30,
+              borderRadius: 18,
               background: "#000",
             }}
-          >
-            <Img
-              src={staticFile(`shots/${shot.file}`)}
-              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 14,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 150,
-                height: 30,
-                borderRadius: 18,
-                background: "#000",
-              }}
-            />
-            {/* Glanzreflex */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: `linear-gradient(115deg, transparent 40%, ${gold}18 50%, transparent 60%)`,
-                backgroundSize: "300% 100%",
-                backgroundPositionX: `${interpolate(frame % 120, [0, 120], [-100, 200])}%`,
-              }}
-            />
-          </div>
+          />
         </div>
       </div>
     </AbsoluteFill>
@@ -362,57 +372,24 @@ const Outro: React.FC<{ brand: string; cta: string; storeLine: string; gold: str
 };
 
 // =================== Haupt-Komposition ===================
-export const SorayaPromo: React.FC<SorayaProps> = ({
-  brand,
-  tagline,
-  cta,
-  storeLine,
-  bg,
-  gold,
-  text,
-  shots,
-}) => {
+export const SorayaPromo: React.FC<SorayaProps> = ({ brand, tagline, cta, storeLine, bg, gold, text, captions, trim }) => {
   const timing = springTiming({ config: { damping: 200 }, durationInFrames: TRANS });
-  const slideDirs = ["from-right", "from-left"] as const;
-
-  const children: React.ReactNode[] = [];
-  children.push(
-    <TransitionSeries.Sequence key="intro" durationInFrames={INTRO}>
-      <Intro brand={brand} tagline={tagline} gold={gold} text={text} />
-    </TransitionSeries.Sequence>
-  );
-  if (shots.length > 0) {
-    children.push(
-      <TransitionSeries.Transition key="t-in" presentation={slide({ direction: "from-bottom" })} timing={timing} />
-    );
-    shots.forEach((shot, i) => {
-      children.push(
-        <TransitionSeries.Sequence key={`s-${i}`} durationInFrames={PER_SHOT}>
-          <PhoneShot shot={shot} gold={gold} text={text} />
-        </TransitionSeries.Sequence>
-      );
-      if (i < shots.length - 1) {
-        children.push(
-          <TransitionSeries.Transition
-            key={`t-${i}`}
-            presentation={slide({ direction: slideDirs[i % 2] })}
-            timing={timing}
-          />
-        );
-      }
-    });
-  }
-  children.push(<TransitionSeries.Transition key="t-out" presentation={fade()} timing={timing} />);
-  children.push(
-    <TransitionSeries.Sequence key="outro" durationInFrames={OUTRO}>
-      <Outro brand={brand} cta={cta} storeLine={storeLine} gold={gold} text={text} />
-    </TransitionSeries.Sequence>
-  );
-
   return (
     <AbsoluteFill>
       <AnimatedBackground gold={gold} bg={bg} />
-      <TransitionSeries>{children}</TransitionSeries>
+      <TransitionSeries>
+        <TransitionSeries.Sequence durationInFrames={INTRO}>
+          <Intro brand={brand} tagline={tagline} gold={gold} text={text} />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition presentation={slide({ direction: "from-bottom" })} timing={timing} />
+        <TransitionSeries.Sequence durationInFrames={TOUR}>
+          <Tour captions={captions} trim={trim} gold={gold} text={text} />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition presentation={fade()} timing={timing} />
+        <TransitionSeries.Sequence durationInFrames={OUTRO}>
+          <Outro brand={brand} cta={cta} storeLine={storeLine} gold={gold} text={text} />
+        </TransitionSeries.Sequence>
+      </TransitionSeries>
     </AbsoluteFill>
   );
 };
