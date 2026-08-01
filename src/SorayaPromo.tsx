@@ -19,16 +19,20 @@ import { loadFont as loadSans } from "@remotion/google-fonts/Jost";
 const { fontFamily: serif } = loadSerif();
 const { fontFamily: sans } = loadSans();
 
-// ---- Timing (Frames bei 30 fps) ----
+// ---- Timing (30 fps) ----
 export const INTRO = 78;
-export const TOUR = 540; // 18 s App-Tour
+export const TOUR = 540;
 export const OUTRO = 100;
 export const TRANS = 20;
 export const FPS = 30;
 export const TOTAL = INTRO + TOUR + OUTRO - 2 * TRANS;
+const TOUR_OFFSET = INTRO - TRANS; // globaler Frame-Offset der Tour (für Beat-Sync)
+const CONTENT = 0.82; // sichtbarer Anteil des App-Bilds (Rest = graues Feld -> abgeschnitten)
+const BEAT = (FPS * 60) / 76; // Musik-Tempo ~76 BPM
+
+const ZODIAC = ["\u2648", "\u2649", "\u264A", "\u264B", "\u264C", "\u264D", "\u264E", "\u264F", "\u2650", "\u2651", "\u2652", "\u2653"];
 
 export type Caption = { text: string; at: number };
-
 export type SorayaProps = {
   brand: string;
   tagline: string;
@@ -52,13 +56,19 @@ export const defaultSorayaProps: SorayaProps = {
   text: "#F4F1E8",
   captions: [],
   trim: 0,
-  video: "app-tour.mp4",
+  video: "app-tour.webm",
+};
+
+const beatPulse = (globalFrame: number) => {
+  const t = (globalFrame % BEAT) / BEAT;
+  return Math.pow(1 - t, 3); // scharfer Anschlag, weicher Abfall
 };
 
 // =================== Hintergrund ===================
 const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
+  const pulse = beatPulse(frame);
 
   const blobs = [
     { c: "#4b2f9e", r: 900, sx: 0.22, sy: 0.18, px: 0, py: 0 },
@@ -67,7 +77,7 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
     { c: gold, r: 480, sx: 0.12, sy: 0.2, px: 1, py: 5 },
   ];
 
-  const stars = new Array(110).fill(0).map((_, i) => {
+  const stars = new Array(120).fill(0).map((_, i) => {
     const x = random(`x-${i}`) * width;
     const y = random(`y-${i}`) * height;
     const size = random(`s-${i}`) * 2.3 + 0.4;
@@ -76,13 +86,27 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
     return { x, y, size, tw, i };
   });
 
-  const cycle = 150;
-  const t = frame % cycle;
-  const shootActive = t < 26;
-  const sp = interpolate(t, [0, 26], [0, 1]);
-  const sx = interpolate(sp, [0, 1], [width * 0.85, width * 0.15]);
-  const sy = interpolate(sp, [0, 1], [height * 0.12, height * 0.5]);
-  const shootOpacity = interpolate(t, [0, 4, 20, 26], [0, 1, 1, 0]);
+  // schwebende Partikel (Staub)
+  const motes = new Array(26).fill(0).map((_, i) => {
+    const bx = random(`mx-${i}`) * width;
+    const drift = Math.sin(frame / (60 + random(`md-${i}`) * 40) + i) * 30;
+    const speed = 0.35 + random(`ms-${i}`) * 0.5;
+    const y = (height - ((frame * speed + random(`mo-${i}`) * height) % (height + 100))) - 50;
+    const size = 1.5 + random(`msz-${i}`) * 3;
+    const op = 0.15 + 0.35 * (0.5 + 0.5 * Math.sin(frame / 20 + i));
+    return { x: bx + drift, y, size, op, i };
+  });
+
+  // zwei versetzte Sternschnuppen
+  const shooters = [0, 75].map((off, k) => {
+    const t = (frame + off) % 150;
+    const active = t < 26;
+    const sp = interpolate(t, [0, 26], [0, 1]);
+    const sx = interpolate(sp, [0, 1], [width * (0.9 - k * 0.3), width * (0.2 - k * 0.1)]);
+    const sy = interpolate(sp, [0, 1], [height * (0.1 + k * 0.15), height * (0.45 + k * 0.1)]);
+    const op = interpolate(t, [0, 4, 20, 26], [0, 1, 1, 0]);
+    return { active, sx, sy, op, k };
+  });
 
   return (
     <AbsoluteFill style={{ background: `radial-gradient(130% 100% at 50% 10%, #141636 0%, ${bg} 55%, #05060F 100%)` }}>
@@ -100,7 +124,7 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
               height: b.r,
               borderRadius: "50%",
               background: b.c,
-              opacity: 0.26,
+              opacity: 0.24 + pulse * 0.05,
               filter: "blur(120px)",
             }}
           />
@@ -108,36 +132,17 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
       })}
 
       {stars.map((s) => (
-        <div
-          key={s.i}
-          style={{
-            position: "absolute",
-            left: s.x,
-            top: s.y,
-            width: s.size,
-            height: s.size,
-            borderRadius: "50%",
-            background: s.i % 9 === 0 ? gold : "#FFFFFF",
-            opacity: s.tw,
-            boxShadow: s.i % 9 === 0 ? `0 0 ${s.size * 3}px ${gold}` : undefined,
-          }}
-        />
+        <div key={s.i} style={{ position: "absolute", left: s.x, top: s.y, width: s.size, height: s.size, borderRadius: "50%", background: s.i % 9 === 0 ? gold : "#FFFFFF", opacity: s.tw, boxShadow: s.i % 9 === 0 ? `0 0 ${s.size * 3}px ${gold}` : undefined }} />
       ))}
 
-      {shootActive && (
-        <div
-          style={{
-            position: "absolute",
-            left: sx,
-            top: sy,
-            width: 160,
-            height: 2,
-            background: `linear-gradient(90deg, transparent, ${gold})`,
-            opacity: shootOpacity,
-            transform: "rotate(30deg)",
-            boxShadow: `0 0 12px ${gold}`,
-          }}
-        />
+      {motes.map((m) => (
+        <div key={`m${m.i}`} style={{ position: "absolute", left: m.x, top: m.y, width: m.size, height: m.size, borderRadius: "50%", background: gold, opacity: m.op, filter: "blur(0.5px)" }} />
+      ))}
+
+      {shooters.map((s) =>
+        s.active ? (
+          <div key={`sh${s.k}`} style={{ position: "absolute", left: s.sx, top: s.sy, width: 170, height: 2, background: `linear-gradient(90deg, transparent, ${gold})`, opacity: s.op, transform: "rotate(30deg)", boxShadow: `0 0 12px ${gold}` }} />
+        ) : null
       )}
 
       <AbsoluteFill style={{ background: "radial-gradient(120% 100% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
@@ -145,14 +150,8 @@ const AnimatedBackground: React.FC<{ gold: string; bg: string }> = ({ gold, bg }
   );
 };
 
-// =================== Kinetischer Text (Intro/Outro) ===================
-const KineticText: React.FC<{ text: string; size: number; color: string; italic?: boolean; delay?: number }> = ({
-  text,
-  size,
-  color,
-  italic,
-  delay = 0,
-}) => {
+// =================== Kinetischer Text ===================
+const KineticText: React.FC<{ text: string; size: number; color: string; italic?: boolean; delay?: number }> = ({ text, size, color, italic, delay = 0 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const words = text.split(" ");
@@ -161,19 +160,7 @@ const KineticText: React.FC<{ text: string; size: number; color: string; italic?
       {words.map((w, i) => {
         const s = spring({ frame: frame - delay - i * 5, fps, config: { damping: 200 }, durationInFrames: 34 });
         return (
-          <span
-            key={i}
-            style={{
-              fontFamily: serif,
-              fontSize: size,
-              fontWeight: 600,
-              fontStyle: italic ? "italic" : "normal",
-              color,
-              opacity: s,
-              transform: `translateY(${(1 - s) * 34}px)`,
-              display: "inline-block",
-            }}
-          >
+          <span key={i} style={{ fontFamily: serif, fontSize: size, fontWeight: 600, fontStyle: italic ? "italic" : "normal", color, opacity: s, transform: `translateY(${(1 - s) * 34}px)`, display: "inline-block" }}>
             {w}
           </span>
         );
@@ -191,21 +178,7 @@ const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: stri
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
       <div style={{ opacity: rise, transform: `translateY(${(1 - rise) * 40}px) scale(${0.9 + rise * 0.1})` }}>
-        <div
-          style={{
-            fontFamily: serif,
-            fontSize: 156,
-            fontWeight: 600,
-            letterSpacing: 16,
-            color: text,
-            backgroundImage: `linear-gradient(105deg, ${text} 40%, ${gold} 50%, ${text} 60%)`,
-            backgroundSize: "200% 100%",
-            backgroundPositionX: shimmer,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
+        <div style={{ fontFamily: serif, fontSize: 156, fontWeight: 600, letterSpacing: 16, color: text, backgroundImage: `linear-gradient(105deg, ${text} 40%, ${gold} 50%, ${text} 60%)`, backgroundSize: "200% 100%", backgroundPositionX: shimmer, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
           {brand}
         </div>
       </div>
@@ -215,93 +188,89 @@ const Intro: React.FC<{ brand: string; tagline: string; gold: string; text: stri
   );
 };
 
-// =================== App-Tour (echtes Video, dynamische Kamera) ===================
+// =================== Umkreisende Sternzeichen + Ring ===================
+const OrbitLayer: React.FC<{ gold: string; frame: number }> = ({ gold, frame }) => {
+  const rot = frame * 0.25;
+  const rx = 470;
+  const ry = 690;
+  return (
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
+      {/* faint rotierender Ring */}
+      <div style={{ position: "absolute", width: rx * 2, height: ry * 2, borderRadius: "50%", border: `1px solid ${gold}`, opacity: 0.14, transform: `rotate(${rot}deg)` }} />
+      <div style={{ position: "absolute", width: rx * 1.5, height: ry * 1.5, borderRadius: "50%", border: `1px solid ${gold}`, opacity: 0.1, transform: `rotate(${-rot * 0.7}deg)` }} />
+      {ZODIAC.map((g, i) => {
+        const a = (i / 12) * Math.PI * 2 + (rot * Math.PI) / 180;
+        const x = Math.cos(a) * rx;
+        const y = Math.sin(a) * ry;
+        const depth = 0.5 + 0.5 * Math.sin(a); // vorne heller
+        return (
+          <div key={i} style={{ position: "absolute", transform: `translate(${x}px, ${y}px)`, fontSize: 40, color: gold, opacity: 0.18 + depth * 0.32 }}>
+            {g}
+          </div>
+        );
+      })}
+    </AbsoluteFill>
+  );
+};
+
+// =================== App-Tour ===================
 const Tour: React.FC<{ captions: Caption[]; trim: number; video: string; gold: string; text: string }> = ({ captions, trim, video, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const gFrame = frame + TOUR_OFFSET;
   const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
+  const pulse = beatPulse(gFrame);
   const screenW = 560;
   const screenH = 1212;
   const trimFrames = Math.round(trim * fps);
 
-  const items = captions.map((c) => ({
-    text: c.text,
-    appear: Math.max(0, Math.round((c.at - trim) * fps)),
-  }));
+  const items = captions.map((c) => ({ text: c.text, appear: Math.max(0, Math.round((c.at - trim) * fps)) }));
 
-  // Kamera: langsame Push-in-Fahrt + Drift + leichte Rotation
-  const pushIn = interpolate(frame, [0, TOUR], [0.95, 1.07]);
-  const driftX = Math.sin(frame / 68) * 20;
-  const rot = Math.sin(frame / 88) * 1.2;
-  const tiltY = Math.sin(frame / 50) * 2.4;
-  const tiltX = Math.cos(frame / 64) * 1.4;
-  const float = Math.sin(frame / 28) * 7;
+  const pushIn = interpolate(frame, [0, TOUR], [0.95, 1.08]);
+  const driftX = Math.sin(frame / 62) * 26;
+  const rot = Math.sin(frame / 84) * 1.4;
+  const tiltY = Math.sin(frame / 46) * 3.2;
+  const tiltX = Math.cos(frame / 60) * 1.8;
+  const float = Math.sin(frame / 26) * 8;
 
-  // Zoom-Punch bei jedem Themenwechsel
   let punch = 0;
   for (const it of items) {
     const d = frame - it.appear;
-    if (d >= 0 && d < 18) punch = Math.max(punch, 0.055 * (1 - d / 18));
+    if (d >= 0 && d < 18) punch = Math.max(punch, 0.06 * (1 - d / 18));
   }
-  const scale = (0.94 + enter * 0.06) * (pushIn + punch);
-  const glowPulse = 22 + punch * 900;
+  const scale = (0.94 + enter * 0.06) * (pushIn + punch + pulse * 0.012);
+  const glow = 24 + punch * 900 + pulse * 26;
+  const clipH = Math.round(screenH * CONTENT);
 
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-      {/* Caption-Overlay */}
-      <div style={{ height: 168, marginBottom: 30, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
-        <div style={{ fontFamily: sans, fontSize: 24, letterSpacing: 7, color: gold, textTransform: "uppercase", marginBottom: 16, opacity: enter }}>
-          ✦ Soraya
-        </div>
+      <OrbitLayer gold={gold} frame={frame} />
+
+      {/* Caption */}
+      <div style={{ height: 168, marginBottom: 26, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", zIndex: 3 }}>
+        <div style={{ fontFamily: sans, fontSize: 24, letterSpacing: 7, color: gold, textTransform: "uppercase", marginBottom: 16, opacity: enter }}>✦ Soraya</div>
         <div style={{ position: "relative", height: 96, width: 960 }}>
           {items.map((it, i) => {
             const end = i < items.length - 1 ? items[i + 1].appear : TOUR;
             const local = frame - it.appear;
-            const op = interpolate(frame, [it.appear, it.appear + 12, end - 12, end], [0, 1, 1, 0], {
-              extrapolateLeft: "clamp",
-              extrapolateRight: "clamp",
-            });
+            const op = interpolate(frame, [it.appear, it.appear + 12, end - 12, end], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
             const reveal = spring({ frame: local, fps, config: { damping: 200 }, durationInFrames: 26 });
-            const underline = interpolate(local, [4, 24], [0, 260], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            const underline = interpolate(local, [4, 24], [0, 280], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
             return (
               <div key={i} style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", opacity: op }}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontFamily: serif,
-                    fontSize: 70,
-                    fontWeight: 600,
-                    color: text,
-                    transform: `translateY(${(1 - reveal) * 26}px)`,
-                  }}
-                >
-                  {it.text}
-                </div>
-                <div style={{ width: op > 0 ? underline : 0, height: 2, background: gold, marginTop: 14, boxShadow: `0 0 10px ${gold}` }} />
+                <div style={{ textAlign: "center", fontFamily: serif, fontSize: 72, fontWeight: 600, color: text, transform: `translateY(${(1 - reveal) * 28}px)` }}>{it.text}</div>
+                <div style={{ width: op > 0 ? underline : 0, height: 2, background: gold, marginTop: 14, boxShadow: `0 0 12px ${gold}` }} />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Spotlight hinter dem Handy */}
-      <div
-        style={{
-          position: "absolute",
-          width: 1000,
-          height: 1000,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${gold}22 0%, transparent 60%)`,
-          top: "48%",
-          left: "50%",
-          transform: `translate(-50%,-50%) scale(${1 + punch * 3})`,
-          opacity: 0.6 + punch * 4,
-          filter: "blur(30px)",
-        }}
-      />
+      {/* Spotlight */}
+      <div style={{ position: "absolute", width: 1000, height: 1000, borderRadius: "50%", background: `radial-gradient(circle, ${gold}22 0%, transparent 60%)`, top: "50%", left: "50%", transform: `translate(-50%,-50%) scale(${1 + punch * 3 + pulse * 0.15})`, opacity: 0.55 + punch * 4, filter: "blur(30px)" }} />
 
-      {/* Handy mit echtem App-Video */}
-      <div style={{ perspective: 1600 }}>
+      {/* Handy */}
+      <div style={{ perspective: 1600, zIndex: 2 }}>
         <div
           style={{
             width: screenW + 34,
@@ -309,61 +278,23 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; video: string; gold: s
             borderRadius: 68,
             padding: 17,
             background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
-            boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 ${glowPulse}px ${gold}44`,
+            boxShadow: `0 44px 100px rgba(0,0,0,0.6), 0 0 ${glow}px ${gold}44`,
             opacity: enter,
             transform: `translateX(${driftX}px) translateY(${(1 - enter) * 60 + float}px) rotateY(${tiltY}deg) rotateX(${tiltX}deg) rotateZ(${rot}deg) scale(${scale})`,
             transformStyle: "preserve-3d",
           }}
         >
-          <div
-            style={{
-              width: screenW,
-              height: screenH,
-              borderRadius: 52,
-              overflow: "hidden",
-              position: "relative",
-              border: `1px solid ${gold}44`,
-              background: "#0A0B1E",
-            }}
-          >
-            <OffthreadVideo
-              src={staticFile(video)}
-              trimBefore={trimFrames}
-              muted
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 14,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 150,
-                height: 30,
-                borderRadius: 18,
-                background: "#000",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: `linear-gradient(115deg, transparent 40%, ${gold}18 50%, transparent 60%)`,
-                backgroundSize: "300% 100%",
-                backgroundPositionX: `${interpolate(frame % 120, [0, 120], [-100, 200])}%`,
-              }}
-            />
-            {/* Sicherheitsnetz: unteren Rand ins Dunkle blenden */}
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: "7%",
-                background: "linear-gradient(to bottom, transparent, #0A0B1E)",
-              }}
-            />
+          <div style={{ width: screenW, height: screenH, borderRadius: 52, overflow: "hidden", position: "relative", border: `1px solid ${gold}44`, background: "#0A0B1E" }}>
+            {/* nur oberer (grau-freier) Teil des App-Bilds */}
+            <div style={{ position: "absolute", top: 0, left: 0, width: screenW, height: clipH, overflow: "hidden" }}>
+              <OffthreadVideo src={staticFile(video)} trimBefore={trimFrames} muted style={{ width: screenW, height: screenH, objectFit: "cover" }} />
+            </div>
+            {/* weiche Kante zum dunklen Bereich */}
+            <div style={{ position: "absolute", left: 0, right: 0, top: clipH - 60, height: 90, background: "linear-gradient(to bottom, transparent, #0A0B1E)" }} />
+            {/* Notch */}
+            <div style={{ position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", width: 150, height: 30, borderRadius: 18, background: "#000" }} />
+            {/* Glanzreflex */}
+            <div style={{ position: "absolute", inset: 0, background: `linear-gradient(115deg, transparent 40%, ${gold}18 50%, transparent 60%)`, backgroundSize: "300% 100%", backgroundPositionX: `${interpolate(frame % 120, [0, 120], [-100, 200])}%` }} />
           </div>
         </div>
       </div>
@@ -371,14 +302,8 @@ const Tour: React.FC<{ captions: Caption[]; trim: number; video: string; gold: s
   );
 };
 
-// =================== Outro / CTA ===================
-const Outro: React.FC<{ brand: string; cta: string; storeLine: string; gold: string; text: string }> = ({
-  brand,
-  cta,
-  storeLine,
-  gold,
-  text,
-}) => {
+// =================== Outro ===================
+const Outro: React.FC<{ brand: string; cta: string; storeLine: string; gold: string; text: string }> = ({ brand, cta, storeLine, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const rise = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 40 });
@@ -387,44 +312,13 @@ const Outro: React.FC<{ brand: string; cta: string; storeLine: string; gold: str
   const shimmer = interpolate(frame % 80, [0, 40, 80], [-200, 200, 200]);
   return (
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-      <div
-        style={{
-          fontFamily: serif,
-          fontSize: 128,
-          fontWeight: 600,
-          letterSpacing: 10,
-          opacity: rise,
-          transform: `translateY(${(1 - rise) * 30}px)`,
-          color: text,
-          backgroundImage: `linear-gradient(105deg, ${text} 40%, ${gold} 50%, ${text} 60%)`,
-          backgroundSize: "200% 100%",
-          backgroundPositionX: shimmer,
-          WebkitBackgroundClip: "text",
-          backgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
-      >
+      <div style={{ fontFamily: serif, fontSize: 128, fontWeight: 600, letterSpacing: 10, opacity: rise, transform: `translateY(${(1 - rise) * 30}px)`, color: text, backgroundImage: `linear-gradient(105deg, ${text} 40%, ${gold} 50%, ${text} 60%)`, backgroundSize: "200% 100%", backgroundPositionX: shimmer, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
         {brand}
       </div>
       <div style={{ marginTop: 8 }}>
         <KineticText text={cta} size={58} color={text} delay={14} />
       </div>
-      <div
-        style={{
-          marginTop: 46,
-          padding: "24px 56px",
-          borderRadius: 999,
-          border: `1.5px solid ${gold}`,
-          color: gold,
-          fontFamily: sans,
-          fontSize: 36,
-          letterSpacing: 3,
-          textTransform: "uppercase",
-          opacity: interpolate(frame, [26, 46], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
-          transform: `scale(${pulse})`,
-          boxShadow: `0 0 ${glow}px ${gold}66`,
-        }}
-      >
+      <div style={{ marginTop: 46, padding: "24px 56px", borderRadius: 999, border: `1.5px solid ${gold}`, color: gold, fontFamily: sans, fontSize: 36, letterSpacing: 3, textTransform: "uppercase", opacity: interpolate(frame, [26, 46], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }), transform: `scale(${pulse})`, boxShadow: `0 0 ${glow}px ${gold}66` }}>
         {storeLine}
       </div>
     </AbsoluteFill>
