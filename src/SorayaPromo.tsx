@@ -114,7 +114,8 @@ const PhoneShot: React.FC<{ shot: Shot; gold: string; text: string }> = ({ shot,
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
-  const zoom = interpolate(frame, [0, PER_SHOT], [1.04, 1.12]);
+  // sanftes Schweben (schneidet nichts ab), kein Zoom-Crop mehr
+  const float = Math.sin(frame / 26) * 7;
   const screenW = 560;
   const screenH = 1212;
 
@@ -145,7 +146,7 @@ const PhoneShot: React.FC<{ shot: Shot; gold: string; text: string }> = ({ shot,
           background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
           boxShadow: `0 40px 90px rgba(0,0,0,0.55), 0 0 60px ${gold}22`,
           opacity: enter,
-          transform: `translateY(${(1 - enter) * 60}px) scale(${0.94 + enter * 0.06})`,
+          transform: `translateY(${(1 - enter) * 60 + float}px) scale(${0.94 + enter * 0.06})`,
         }}
       >
         <div
@@ -161,7 +162,7 @@ const PhoneShot: React.FC<{ shot: Shot; gold: string; text: string }> = ({ shot,
         >
           <Img
             src={staticFile(`shots/${shot.file}`)}
-            style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${zoom})` }}
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
           />
           <div
             style={{
