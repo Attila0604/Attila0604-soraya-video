@@ -1,48 +1,75 @@
-// Öffnet die Live-App (Single-Page-App), klickt die untere Navi durch
-// und macht von jedem Bereich einen Screenshot -> public/shots/ + manifest.json
+// Nimmt die Live-App als echtes Bildschirm-VIDEO auf (Playwright recordVideo):
+// scrollt + klickt sich durch die Bereiche -> public/app-tour.webm + tour.json
 import { chromium, devices } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
 
 const BASE_URL = process.env.BASE_URL || "https://soraya-web.vercel.app";
-const config = JSON.parse(fs.readFileSync("shots.config.json", "utf-8"));
+const cfg = JSON.parse(fs.readFileSync("shots.config.json", "utf-8"));
+const captions = cfg.captions || [];
 
-const outDir = path.join("public", "shots");
-fs.mkdirSync(outDir, { recursive: true });
+const pub = "public";
+const recDir = path.join(pub, "_rec");
+fs.mkdirSync(recDir, { recursive: true });
 
 const phone = devices["iPhone 13 Pro"];
 const browser = await chromium.launch();
-const context = await browser.newContext({ ...phone });
+const context = await browser.newContext({
+  ...phone,
+  recordVideo: { dir: recDir, size: { width: 390, height: 844 } },
+});
 const page = await context.newPage();
 
-const manifest = [];
-let i = 0;
-for (const shot of config) {
-  // Bei jedem Screen frisch laden, damit der Zustand sauber ist
-  try {
-    await page.goto(BASE_URL, { waitUntil: "networkidle", timeout: 45000 });
-  } catch (e) {
-    await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
-  }
-  await page.waitForTimeout(2500); // Laden / Animationen
+const t0 = Date.now();
+try {
+  await page.goto(BASE_URL, { waitUntil: "networkidle", timeout: 60000 });
+} catch (e) {
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+}
+await page.waitForTimeout(2500);
 
-  // Auf den Navi-Knopf klicken (letztes Vorkommen = untere Leiste)
-  if (shot.click) {
+const smoothScroll = async (to, step, delay) => {
+  await page.evaluate(
+    async ({ to, step, delay }) => {
+      const start = window.scrollY;
+      const dir = to > start ? 1 : -1;
+      for (let y = start; dir > 0 ? y <= to : y >= to; y += dir * step) {
+        window.scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    },
+    { to, step, delay }
+  );
+};
+
+const items = [];
+for (const cap of captions) {
+  const at = (Date.now() - t0) / 1000; // Zeitpunkt im Video (Sekunden)
+  items.push({ text: cap.text, at });
+
+  if (cap.nav) {
     try {
-      await page.getByText(shot.click, { exact: true }).last().click({ timeout: 8000 });
-      await page.waitForTimeout(1800);
+      await page.getByText(cap.nav, { exact: true }).last().click({ timeout: 8000 });
     } catch (e) {
-      console.log("Konnte nicht klicken:", shot.click, "-", e.message);
+      console.log("nav fail:", cap.nav, "-", e.message);
     }
+    await page.waitForTimeout(1400);
   }
-
-  const file = `shot-${String(i).padStart(2, "0")}.png`;
-  await page.screenshot({ path: path.join(outDir, file), fullPage: false });
-  manifest.push({ file, caption: shot.caption || "" });
-  console.log("captured:", shot.click || "Home", "->", file);
-  i++;
+  // Bewegung erzeugen: sanft runter, kurz halten, wieder rauf
+  await smoothScroll(650, 16, 26);
+  await page.waitForTimeout(900);
+  await smoothScroll(0, 18, 22);
+  await page.waitForTimeout(700);
 }
 
-fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));
-console.log("manifest written with", manifest.length, "shots");
+const video = page.video();
+await page.close();
+await context.close();
 await browser.close();
+
+const src = await video.path();
+fs.copyFileSync(src, path.join(pub, "app-tour.webm"));
+
+const trim = Math.max(0, (items[0]?.at ?? 0) - 0.4); // Ladephase am Anfang wegschneiden
+fs.writeFileSync(path.join(pub, "tour.json"), JSON.stringify({ trim, items }, null, 2));
+console.log("app-tour.webm + tour.json geschrieben, trim =", trim.toFixed(2), "s");
