@@ -4,9 +4,7 @@ import {
   defaultSorayaProps,
   SorayaProps,
   Shot,
-  INTRO,
-  PER_SHOT,
-  OUTRO,
+  computeDuration,
 } from "./SorayaPromo";
 
 export const RemotionRoot: React.FC = () => {
@@ -17,7 +15,7 @@ export const RemotionRoot: React.FC = () => {
       fps={30}
       width={1080}
       height={1920}
-      durationInFrames={INTRO + OUTRO}
+      durationInFrames={computeDuration(0)}
       defaultProps={defaultSorayaProps}
       calculateMetadata={async ({ props }) => {
         let shots: Shot[] = [];
@@ -28,10 +26,7 @@ export const RemotionRoot: React.FC = () => {
           shots = [];
         }
         const nextProps: SorayaProps = { ...props, shots };
-        return {
-          props: nextProps,
-          durationInFrames: INTRO + shots.length * PER_SHOT + OUTRO,
-        };
+        return { props: nextProps, durationInFrames: computeDuration(shots.length) };
       }}
     />
   );
