@@ -3,6 +3,10 @@ name: Render Soraya Video
 on:
   workflow_dispatch:
     inputs:
+      base_url:
+        description: "Live-URL der App"
+        required: true
+        default: "https://soraya-web.vercel.app"
       brand:
         description: "Markenname"
         required: true
@@ -30,11 +34,17 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - name: Build props
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Screenshots der App aufnehmen
+        run: npm run shoot
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url }}
+      - name: Props bauen
         run: echo "$WORKFLOW_INPUT" > input-props.json
         env:
           WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
-      - name: Render
+      - name: Video rendern
         run: npx remotion render SorayaPromo out/soraya.mp4 --props="./input-props.json"
       - uses: actions/upload-artifact@v4
         with:
