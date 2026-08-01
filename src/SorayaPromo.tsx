@@ -2,6 +2,8 @@ import React from "react";
 import {
   AbsoluteFill,
   Sequence,
+  Img,
+  staticFile,
   interpolate,
   spring,
   useCurrentFrame,
@@ -14,7 +16,13 @@ import { loadFont as loadSans } from "@remotion/google-fonts/Jost";
 const { fontFamily: serif } = loadSerif();
 const { fontFamily: sans } = loadSans();
 
-// ---- Props (editable via GitHub Action inputs / input-props.json) ----
+// ---- Timing (Frames bei 30 fps) ----
+export const INTRO = 75; // 2.5 s Marken-Intro
+export const PER_SHOT = 96; // 3.2 s pro App-Screen
+export const OUTRO = 96; // 3.2 s Call-to-Action
+
+export type Shot = { file: string; caption: string };
+
 export type SorayaProps = {
   brand: string;
   tagline: string;
@@ -23,6 +31,7 @@ export type SorayaProps = {
   bg: string;
   gold: string;
   text: string;
+  shots: Shot[];
 };
 
 export const defaultSorayaProps: SorayaProps = {
@@ -33,20 +42,19 @@ export const defaultSorayaProps: SorayaProps = {
   bg: "#0A0B1E",
   gold: "#E4C77E",
   text: "#F4F1E8",
+  shots: [],
 };
 
-const ZODIAC = ["\u2648", "\u2649", "\u264A", "\u264B", "\u264C", "\u264D", "\u264E", "\u264F", "\u2650", "\u2651", "\u2652", "\u2653"];
-
-// ---------- Background: deterministic starfield + soft nebula ----------
+// ---------- Hintergrund: Sternenhimmel ----------
 const Starfield: React.FC<{ gold: string }> = ({ gold }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
-  const stars = new Array(140).fill(0).map((_, i) => {
+  const stars = new Array(120).fill(0).map((_, i) => {
     const x = random(`x-${i}`) * width;
     const y = random(`y-${i}`) * height;
-    const size = random(`s-${i}`) * 2.6 + 0.4;
+    const size = random(`s-${i}`) * 2.4 + 0.4;
     const phase = random(`p-${i}`) * Math.PI * 2;
-    const twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(frame / 14 + phase));
+    const twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(frame / 14 + phase));
     return { x, y, size, twinkle, i };
   });
   return (
@@ -71,86 +79,21 @@ const Starfield: React.FC<{ gold: string }> = ({ gold }) => {
   );
 };
 
-// ---------- Rotating zodiac ring ----------
-const ZodiacRing: React.FC<{ gold: string }> = ({ gold }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const appear = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 60 });
-  const rotate = interpolate(frame, [0, 630], [0, 40]);
-  const radius = 430;
-  return (
-    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-      <div
-        style={{
-          width: radius * 2,
-          height: radius * 2,
-          transform: `rotate(${rotate}deg) scale(${0.8 + appear * 0.2})`,
-          opacity: appear * 0.55,
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            border: `1px solid ${gold}`,
-            opacity: 0.35,
-          }}
-        />
-        {ZODIAC.map((glyph, i) => {
-          const angle = (i / 12) * Math.PI * 2;
-          const x = radius + Math.cos(angle) * radius - 26;
-          const y = radius + Math.sin(angle) * radius - 26;
-          return (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                left: x,
-                top: y,
-                width: 52,
-                height: 52,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                fontSize: 40,
-                color: gold,
-                transform: `rotate(${-rotate}deg)`,
-              }}
-            >
-              {glyph}
-            </div>
-          );
-        })}
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ---------- Wordmark ----------
+// ---------- Wortmarke (Intro) ----------
 const Wordmark: React.FC<{ brand: string; gold: string; text: string }> = ({ brand, gold, text }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const rise = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 45 });
-  const letterSpacing = interpolate(rise, [0, 1], [40, 18]);
   const shimmer = interpolate(frame % 90, [0, 45, 90], [-200, 200, 200]);
   return (
-    <div
-      style={{
-        transform: `translateY(${(1 - rise) * 40}px)`,
-        opacity: rise,
-        textAlign: "center",
-      }}
-    >
+    <div style={{ transform: `translateY(${(1 - rise) * 40}px)`, opacity: rise, textAlign: "center" }}>
       <div
         style={{
           fontFamily: serif,
           fontSize: 150,
           fontWeight: 600,
-          letterSpacing,
+          letterSpacing: interpolate(rise, [0, 1], [40, 18]),
           color: text,
-          position: "relative",
           backgroundImage: `linear-gradient(105deg, ${text} 40%, ${gold} 50%, ${text} 60%)`,
           backgroundSize: "200% 100%",
           backgroundPositionX: shimmer,
@@ -161,20 +104,83 @@ const Wordmark: React.FC<{ brand: string; gold: string; text: string }> = ({ bra
       >
         {brand}
       </div>
-      <div
-        style={{
-          width: 120,
-          height: 1,
-          background: gold,
-          margin: "18px auto 0",
-          opacity: rise,
-        }}
-      />
+      <div style={{ width: 120, height: 1, background: gold, margin: "18px auto 0" }} />
     </div>
   );
 };
 
-// ---------- Generic fade/rise wrapper ----------
+// ---------- Handy-Rahmen mit App-Screenshot ----------
+const PhoneShot: React.FC<{ shot: Shot; gold: string; text: string }> = ({ shot, gold, text }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 30 });
+  const zoom = interpolate(frame, [0, PER_SHOT], [1.04, 1.12]);
+  const screenW = 560;
+  const screenH = 1212;
+
+  return (
+    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
+      <div
+        style={{
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * -20}px)`,
+          fontFamily: serif,
+          fontSize: 66,
+          fontWeight: 600,
+          color: text,
+          marginBottom: 46,
+          textAlign: "center",
+          maxWidth: 900,
+        }}
+      >
+        {shot.caption}
+      </div>
+
+      <div
+        style={{
+          width: screenW + 34,
+          height: screenH + 34,
+          borderRadius: 68,
+          padding: 17,
+          background: "linear-gradient(160deg, #2a2c44, #0d0e1c)",
+          boxShadow: `0 40px 90px rgba(0,0,0,0.55), 0 0 60px ${gold}22`,
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 60}px) scale(${0.94 + enter * 0.06})`,
+        }}
+      >
+        <div
+          style={{
+            width: screenW,
+            height: screenH,
+            borderRadius: 52,
+            overflow: "hidden",
+            position: "relative",
+            border: `1px solid ${gold}44`,
+            background: "#000",
+          }}
+        >
+          <Img
+            src={staticFile(`shots/${shot.file}`)}
+            style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${zoom})` }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 150,
+              height: 30,
+              borderRadius: 18,
+              background: "#000",
+            }}
+          />
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const Reveal: React.FC<{ delay?: number; children: React.ReactNode; y?: number }> = ({
   delay = 0,
   children,
@@ -186,11 +192,7 @@ const Reveal: React.FC<{ delay?: number; children: React.ReactNode; y?: number }
   return <div style={{ opacity: s, transform: `translateY(${(1 - s) * y}px)` }}>{children}</div>;
 };
 
-const centered: React.CSSProperties = {
-  justifyContent: "center",
-  alignItems: "center",
-  flexDirection: "column",
-};
+const centered: React.CSSProperties = { justifyContent: "center", alignItems: "center", flexDirection: "column" };
 
 export const SorayaPromo: React.FC<SorayaProps> = ({
   brand,
@@ -200,34 +202,30 @@ export const SorayaPromo: React.FC<SorayaProps> = ({
   bg,
   gold,
   text,
+  shots,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const fadeOut = interpolate(frame, [durationInFrames - 25, durationInFrames], [1, 0], {
     extrapolateLeft: "clamp",
   });
+  const outroStart = INTRO + shots.length * PER_SHOT;
 
   return (
-    <AbsoluteFill style={{ background: `radial-gradient(120% 90% at 50% 20%, #171838 0%, ${bg} 60%, #05060F 100%)`, opacity: fadeOut }}>
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(120% 90% at 50% 15%, #171838 0%, ${bg} 60%, #05060F 100%)`,
+        opacity: fadeOut,
+      }}
+    >
       <Starfield gold={gold} />
-      <ZodiacRing gold={gold} />
 
-      {/* Scene 1: Wordmark + tagline */}
-      <Sequence from={0} durationInFrames={200}>
+      <Sequence from={0} durationInFrames={INTRO}>
         <AbsoluteFill style={centered}>
           <Wordmark brand={brand} gold={gold} text={text} />
-          <Sequence from={55}>
+          <Sequence from={40}>
             <Reveal>
-              <div
-                style={{
-                  fontFamily: serif,
-                  fontSize: 54,
-                  fontStyle: "italic",
-                  color: gold,
-                  marginTop: 34,
-                  letterSpacing: 2,
-                }}
-              >
+              <div style={{ fontFamily: serif, fontSize: 52, fontStyle: "italic", color: gold, marginTop: 30 }}>
                 {tagline}
               </div>
             </Reveal>
@@ -235,59 +233,33 @@ export const SorayaPromo: React.FC<SorayaProps> = ({
         </AbsoluteFill>
       </Sequence>
 
-      {/* Scene 2: Features */}
-      <Sequence from={200} durationInFrames={230}>
-        <AbsoluteFill style={{ ...centered, gap: 40, padding: 90 }}>
-          {[
-            { t: "Tägliches Horoskop", d: "Pers\u00f6nlich auf dein Geburtsbild berechnet" },
-            { t: "Synastrie", d: "Wie eure Sterne zueinander stehen" },
-            { t: "Deutung im Chat", d: "Frag Soraya \u2013 jederzeit, ganz privat" },
-          ].map((f, i) => (
-            <Sequence key={i} from={i * 28}>
-              <Reveal>
-                <div
-                  style={{
-                    width: 820,
-                    padding: "34px 44px",
-                    borderRadius: 26,
-                    border: `1px solid ${gold}55`,
-                    background: "rgba(255,255,255,0.04)",
-                    backdropFilter: "blur(6px)",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontFamily: serif, fontSize: 60, color: text, fontWeight: 600 }}>
-                    {f.t}
-                  </div>
-                  <div style={{ fontFamily: sans, fontSize: 34, color: `${text}BB`, marginTop: 10, fontWeight: 300 }}>
-                    {f.d}
-                  </div>
-                </div>
-              </Reveal>
-            </Sequence>
-          ))}
-        </AbsoluteFill>
-      </Sequence>
+      {shots.map((shot, i) => (
+        <Sequence key={i} from={INTRO + i * PER_SHOT} durationInFrames={PER_SHOT}>
+          <PhoneShot shot={shot} gold={gold} text={text} />
+        </Sequence>
+      ))}
 
-      {/* Scene 3: CTA */}
-      <Sequence from={430} durationInFrames={200}>
+      <Sequence from={outroStart} durationInFrames={OUTRO}>
         <AbsoluteFill style={centered}>
           <Reveal>
-            <div style={{ fontFamily: serif, fontSize: 72, color: text, fontWeight: 600, textAlign: "center" }}>
-              {cta}
-            </div>
+            <div style={{ fontFamily: serif, fontSize: 108, fontWeight: 600, color: text }}>{brand}</div>
           </Reveal>
-          <Sequence from={22}>
+          <Sequence from={16}>
+            <Reveal>
+              <div style={{ fontFamily: serif, fontSize: 60, color: text, marginTop: 10 }}>{cta}</div>
+            </Reveal>
+          </Sequence>
+          <Sequence from={30}>
             <Reveal>
               <div
                 style={{
                   marginTop: 44,
-                  padding: "24px 56px",
+                  padding: "22px 52px",
                   borderRadius: 999,
                   border: `1.5px solid ${gold}`,
                   color: gold,
                   fontFamily: sans,
-                  fontSize: 38,
+                  fontSize: 36,
                   letterSpacing: 3,
                   textTransform: "uppercase",
                   boxShadow: `0 0 40px ${gold}44`,
