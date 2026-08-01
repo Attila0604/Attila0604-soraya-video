@@ -1,0 +1,6 @@
+[
+  { "click": null,       "caption": "Dein Kosmos, elegant & persönlich" },
+  { "click": "Horoskop", "caption": "Dein täglicher Impuls" },
+  { "click": "Chat",     "caption": "Frag Soraya – jederzeit" },
+  { "click": "Analyse",  "caption": "Dein Birth Chart" }
+]
