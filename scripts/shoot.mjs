@@ -3,7 +3,6 @@
 import { chromium, devices } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 
 const BASE_URL = process.env.BASE_URL || "https://soraya-web.vercel.app";
 const cfg = JSON.parse(fs.readFileSync("shots.config.json", "utf-8"));
@@ -44,15 +43,6 @@ try {
 }
 await page.waitForTimeout(400);
 
-// Unterkante der Navileiste messen -> alles darunter (graues Feld) wird weggeschnitten
-let cropH = 760;
-try {
-  const box = await page.getByText("Profil", { exact: true }).last().boundingBox();
-  if (box) cropH = Math.min(844, Math.round(box.y + box.height + 12));
-} catch (e) {
-  console.log("cropH-Messung fehlgeschlagen:", e.message);
-}
-console.log("cropH =", cropH);
 
 const smoothScroll = async (to, step, delay) => {
   await page.evaluate(
@@ -94,19 +84,8 @@ await context.close();
 await browser.close();
 
 const rawWebm = await video.path();
-let videoFile = "app-tour.mp4";
-const h = Math.max(2, cropH - (cropH % 2)); // gerade Höhe für h264
-try {
-  execSync(
-    `ffmpeg -y -i "${rawWebm}" -vf "crop=iw:${h}:0:0" -c:v libx264 -pix_fmt yuv420p -crf 22 -preset veryfast -an "${path.join(pub, "app-tour.mp4")}"`,
-    { stdio: "inherit" }
-  );
-} catch (e) {
-  console.log("ffmpeg-Crop fehlgeschlagen, nutze Rohvideo:", e.message);
-  fs.copyFileSync(rawWebm, path.join(pub, "app-tour.webm"));
-  videoFile = "app-tour.webm";
-}
+fs.copyFileSync(rawWebm, path.join(pub, "app-tour.webm"));
 
 const trim = Math.max(0, (items[0]?.at ?? 0) - 0.4);
-fs.writeFileSync(path.join(pub, "tour.json"), JSON.stringify({ trim, items, video: videoFile }, null, 2));
-console.log("Fertig: " + videoFile + " (Crop-Höhe " + h + "), trim =", trim.toFixed(2), "s");
+fs.writeFileSync(path.join(pub, "tour.json"), JSON.stringify({ trim, items, video: "app-tour.webm" }, null, 2));
+console.log("Fertig: app-tour.webm + tour.json, trim =", trim.toFixed(2), "s");
