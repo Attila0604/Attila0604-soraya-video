@@ -27,7 +27,7 @@ export const TRANS = 20;
 export const FPS = 30;
 export const TOTAL = INTRO + TOUR + OUTRO - 2 * TRANS;
 const TOUR_OFFSET = INTRO - TRANS; // globaler Frame-Offset der Tour (für Beat-Sync)
-const CONTENT = 0.82; // sichtbarer Anteil des App-Bilds (Rest = graues Feld -> abgeschnitten)
+const CONTENT = 0.78; // sichtbarer Anteil des App-Bilds (Rest = graues Feld -> abgeschnitten)
 const BEAT = (FPS * 60) / 76; // Musik-Tempo ~76 BPM
 
 const ZODIAC = ["\u2648", "\u2649", "\u264A", "\u264B", "\u264C", "\u264D", "\u264E", "\u264F", "\u2650", "\u2651", "\u2652", "\u2653"];
