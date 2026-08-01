@@ -1,16 +1,38 @@
-import { Composition } from "remotion";
-import { SorayaPromo, defaultSorayaProps } from "./SorayaPromo";
+import { Composition, staticFile } from "remotion";
+import {
+  SorayaPromo,
+  defaultSorayaProps,
+  SorayaProps,
+  Shot,
+  INTRO,
+  PER_SHOT,
+  OUTRO,
+} from "./SorayaPromo";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <Composition
       id="SorayaPromo"
       component={SorayaPromo}
-      durationInFrames={630}
       fps={30}
       width={1080}
       height={1920}
+      durationInFrames={INTRO + OUTRO}
       defaultProps={defaultSorayaProps}
+      calculateMetadata={async ({ props }) => {
+        let shots: Shot[] = [];
+        try {
+          const res = await fetch(staticFile("shots/manifest.json"));
+          shots = (await res.json()) as Shot[];
+        } catch (e) {
+          shots = [];
+        }
+        const nextProps: SorayaProps = { ...props, shots };
+        return {
+          props: nextProps,
+          durationInFrames: INTRO + shots.length * PER_SHOT + OUTRO,
+        };
+      }}
     />
   );
 };
